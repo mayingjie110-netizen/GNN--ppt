@@ -1,0 +1,12 @@
+[   82225ms] [LOG] {tfjs-core: 2.0.0, tfjs-backend-cpu: 2.0.0, tfjs-backend-webgl: 2.0.0, tfjs-data: 2.0.0, tfjs-layers: 2.0.0} @ https://distill.pub/2021/gnn-intro/post--gnn-intro.77de5100.js:134260
+[   82281ms] [WARNING] WebComponentsReady @ https://distill.pub/2021/gnn-intro/:2
+[   88588ms] [WARNING] WARN Selection not supported for boxplot yet. @ https://cdn.jsdelivr.net/npm/vega-lite@4:0
+[   89144ms] [WARNING] WARN Selection not supported for boxplot yet. @ https://cdn.jsdelivr.net/npm/vega-lite@4:0
+[   89147ms] [WARNING] WARN Selection not supported for boxplot yet. @ https://cdn.jsdelivr.net/npm/vega-lite@4:0
+[   89148ms] [WARNING] WARN Selection not supported for boxplot yet. @ https://cdn.jsdelivr.net/npm/vega-lite@4:0
+[   89488ms] [WARNING] WARN Selection not supported for boxplot yet. @ https://cdn.jsdelivr.net/npm/vega-lite@4:0
+[   89798ms] [WARNING] WARN Selection not supported for boxplot yet. @ https://cdn.jsdelivr.net/npm/vega-lite@4:0
+[   90256ms] [WARNING] WARN Selection not supported for boxplot yet. @ https://cdn.jsdelivr.net/npm/vega-lite@4:0
+[  117902ms] [INFO] Slow network is detected. See https://www.chromestatus.com/feature/5636954674692096 for more details. Fallback font will be used while loading: about:blank @ https://cdn.jsdelivr.net/npm/mathjax@2/jax/output/HTML-CSS/jax.js?V=2.7.9:18
+[  118112ms] [ERROR] Access to font at 'about:blank' from origin 'https://distill.pub' has been blocked by CORS policy: Cross origin requests are only supported for protocol schemes: chrome, chrome-extension, chrome-untrusted, data, http, https, isolated-app. @ https://distill.pub/2021/gnn-intro/:0
+[  118113ms] [ERROR] Failed to load resource: net::ERR_FAILED @ about:blank:0

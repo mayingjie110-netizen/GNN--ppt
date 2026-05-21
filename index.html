@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>图神经网络入门与大图训练内存瓶颈</title>
+  <link rel="stylesheet" href="assets/local/slides.css">
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [["\\(", "\\)"], ["$", "$"]] },
+      svg: { fontCache: "global" }
+    };
+  </script>
+  <script>
+    window.addEventListener("load", () => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js";
+      script.async = true;
+      document.head.appendChild(script);
+    });
+  </script>
+</head>
+<body>
+  <main class="deck" aria-live="polite">
+    <section class="slide active">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">Graph Neural Networks</div>
+          <h1>图神经网络：让神经网络沿着关系传播信息</h1>
+        </div>
+        <div class="page-no">01</div>
+      </header>
+      <div class="slide-body two-col">
+        <div class="stack">
+          <p class="lead">GNN 的核心不是把图“压扁”为表格，而是在节点、边和全局上下文之间反复传递、聚合、更新表示。</p>
+          <div class="formula compact">直觉：一层看一跳邻居，\(K\) 层看 \(K\)-hop 子图。</div>
+        </div>
+        <div class="distill-frame tall">
+          <iframe src="assets/distill/focused.html?figure=layerwise-trace" title="Distill layerwise trace interaction"></iframe>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>操作：方向键翻页，F 全屏。图中节点可 hover。</span>
+        <span>Interactive figure from Distill, CC-BY 4.0.</span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">Neural Network Primer</div>
+          <h2>普通神经网络学习的是一串可微变换</h2>
+        </div>
+        <div class="page-no">02</div>
+      </header>
+      <div class="slide-body two-col-even">
+        <div class="stack">
+          <ul class="bullets">
+            <li>输入向量经过多层线性变换和非线性激活。</li>
+            <li>损失函数衡量预测和标签的差距。</li>
+            <li>反向传播把梯度传回每一层，用优化器更新参数。</li>
+          </ul>
+          <div class="formula">
+            \[
+              h^{(l)}=\sigma(W^{(l)}h^{(l-1)}+b^{(l)})
+            \]
+            \[
+              \theta \leftarrow \theta-\eta\nabla_\theta\mathcal{L}
+            \]
+          </div>
+        </div>
+        <div class="diagram-panel">
+          <svg viewBox="0 0 720 430" width="100%" height="100%" role="img" aria-label="MLP forward and backward propagation">
+            <defs>
+              <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#73d2de"></path>
+              </marker>
+              <marker id="gradArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef6f6c"></path>
+              </marker>
+            </defs>
+            <rect x="24" y="28" width="672" height="360" rx="8" fill="#11182c" stroke="rgba(255,255,255,.16)"></rect>
+            <g fill="#73d2de">
+              <circle cx="118" cy="132" r="18"></circle><circle cx="118" cy="214" r="18"></circle><circle cx="118" cy="296" r="18"></circle>
+              <circle cx="290" cy="98" r="18"></circle><circle cx="290" cy="174" r="18"></circle><circle cx="290" cy="250" r="18"></circle><circle cx="290" cy="326" r="18"></circle>
+              <circle cx="462" cy="132" r="18"></circle><circle cx="462" cy="214" r="18"></circle><circle cx="462" cy="296" r="18"></circle>
+              <circle cx="610" cy="214" r="22" fill="#f6c85f"></circle>
+            </g>
+            <g stroke="#73d2de" stroke-width="2" opacity=".45">
+              <path d="M136 132 C190 118, 230 106, 272 98"></path><path d="M136 132 C194 150, 225 162, 272 174"></path><path d="M136 214 C190 178, 226 122, 272 98"></path><path d="M136 214 C194 214, 226 214, 272 250"></path><path d="M136 296 C194 286, 228 310, 272 326"></path>
+              <path d="M308 98 C358 104, 394 118, 444 132"></path><path d="M308 174 C358 182, 394 196, 444 214"></path><path d="M308 250 C358 250, 394 262, 444 296"></path><path d="M308 326 C358 304, 394 296, 444 296"></path>
+              <path d="M480 132 C520 152, 556 184, 588 214" marker-end="url(#arrow)"></path><path d="M480 214 C522 214, 552 214, 588 214" marker-end="url(#arrow)"></path><path d="M480 296 C522 270, 556 238, 588 214" marker-end="url(#arrow)"></path>
+            </g>
+            <path d="M610 248 C520 390, 300 398, 118 330" fill="none" stroke="#ef6f6c" stroke-width="3" marker-end="url(#gradArrow)"></path>
+            <text x="86" y="382" fill="#aeb7c7" font-size="18">输入</text>
+            <text x="248" y="382" fill="#aeb7c7" font-size="18">隐藏层</text>
+            <text x="424" y="382" fill="#aeb7c7" font-size="18">表示</text>
+            <text x="584" y="382" fill="#aeb7c7" font-size="18">预测</text>
+            <text x="330" y="406" fill="#ef6f6c" font-size="15">loss 的梯度沿计算图反传</text>
+          </svg>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>普通 NN 假设输入可以组织成固定维度张量。</span>
+        <span>Source: standard backpropagation formulation.</span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">Why Graphs</div>
+          <h2>很多数据天然不是孤立样本，而是实体之间的关系</h2>
+        </div>
+        <div class="page-no">03</div>
+      </header>
+      <div class="slide-body">
+        <div class="concept-grid">
+          <div class="concept"><strong>社交网络</strong><span>人是节点，互动或关注是边，用于社区、影响力和推荐。</span></div>
+          <div class="concept"><strong>分子</strong><span>原子是节点，化学键是边，用于性质预测和药物发现。</span></div>
+          <div class="concept"><strong>文本</strong><span>token 可按顺序或注意力关系连成图。</span></div>
+          <div class="concept"><strong>图像</strong><span>像素或目标可作为节点，空间邻接是边。</span></div>
+          <div class="concept"><strong>引用网络</strong><span>论文是节点，引用是有向边，用于分类和检索。</span></div>
+        </div>
+        <div class="metric-row">
+          <div class="metric"><strong>实体</strong><span>节点 \(V\)</span></div>
+          <div class="metric"><strong>关系</strong><span>边 \(E\)</span></div>
+          <div class="metric"><strong>上下文</strong><span>全局属性 \(u\)</span></div>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>Distill 文章用图像、文本、分子、社交网络展示图数据的统一视角。</span>
+        <span><a href="https://distill.pub/2021/gnn-intro/">distill.pub/2021/gnn-intro</a></span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">Data As Graph</div>
+          <h2>图像和文本也能被看成图，只是结构更规则</h2>
+        </div>
+        <div class="page-no">04</div>
+      </header>
+      <div class="slide-body">
+        <div class="single-figure">
+          <div class="distill-frame large">
+            <iframe src="assets/distill/focused.html?figure=image-as-graph" title="Image as graph interaction"></iframe>
+          </div>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>点击像素，观察图表示如何同步变化。</span>
+        <span>Interactive figures from Distill, CC-BY 4.0.</span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">Limits Of Classical NN</div>
+          <h2>传统神经网络直接处理图时会撞上四个问题</h2>
+        </div>
+        <div class="page-no">05</div>
+      </header>
+      <div class="slide-body two-col">
+        <div class="stack">
+          <ul class="bullets">
+            <li>图的节点数和边数不固定，不能天然对齐成同尺寸输入。</li>
+            <li>每个节点邻居数量可变，局部结构不像卷积窗口那样固定。</li>
+            <li>节点编号可任意交换，同一张图有很多邻接矩阵。</li>
+            <li>大图邻接矩阵极稀疏，用 \(O(|V|^2)\) 存储很浪费。</li>
+          </ul>
+          <div class="formula compact">模型应该对节点排列保持不变：同一结构换编号，预测不应变化。</div>
+        </div>
+        <div class="distill-frame">
+          <iframe src="assets/distill/focused.html?figure=shuffle-sm" title="Adjacency matrix permutation interaction"></iframe>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>点击边可以改变图结构，观察同一图的多种邻接矩阵表示。</span>
+        <span>Interactive figure from Distill, CC-BY 4.0.</span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">Graph Format</div>
+          <h2>一个可学习的图通常包含节点、边、全局属性和连接关系</h2>
+        </div>
+        <div class="page-no">06</div>
+      </header>
+      <div class="slide-body two-col">
+        <div class="formula">
+          \[
+            G=(V,E,u)
+          \]
+          \[
+            X\in\mathbb{R}^{|V|\times d_v},\quad
+            Z\in\mathbb{R}^{|E|\times d_e}
+          \]
+          \[
+            E=\{(s_k,t_k)\}_{k=1}^{|E|},\quad
+            u\in\mathbb{R}^{d_u}
+          \]
+        </div>
+        <div class="distill-frame">
+          <iframe src="assets/distill/focused.html?figure=graph-to-tensor" title="Graph to tensor interaction"></iframe>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>hover 或点击节点、边和全局标记，查看张量表示如何变化。</span>
+        <span>Interactive figure from Distill, CC-BY 4.0.</span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">Sparse Connectivity</div>
+          <h2>邻接表更适合稀疏图：只存真实存在的连接</h2>
+        </div>
+        <div class="page-no">07</div>
+      </header>
+      <div class="slide-body two-col-even">
+        <div class="stack">
+          <div class="formula">
+            邻接矩阵：\[
+              A\in\{0,1\}^{|V|\times |V|},\quad O(|V|^2)
+            \]
+            邻接表：\[
+              [(s_1,t_1),\dots,(s_{|E|},t_{|E|})],\quad O(|E|)
+            \]
+          </div>
+          <p class="body-copy">真实世界图通常远比完整图稀疏。GNN 实现会围绕“按边 gather/scatter”组织计算，而不是在大量 0 上做矩阵运算。</p>
+        </div>
+        <div class="distill-frame">
+          <iframe src="assets/distill/focused.html?figure=shuffle-sm" title="Adjacency list motivation interaction"></iframe>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>同样的图结构可以有多个邻接矩阵，边列表更贴近稀疏计算。</span>
+        <span>Distill, CC-BY 4.0.</span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">Simplest GNN</div>
+          <h2>最简单的 GNN 是 graph-in graph-out 的可微变换</h2>
+        </div>
+        <div class="page-no">08</div>
+      </header>
+      <div class="slide-body two-col">
+        <div class="stack">
+          <ul class="bullets">
+            <li>输入是一张图，输出仍是一张图。</li>
+            <li>节点、边、全局属性的 embedding 被 MLP 更新。</li>
+            <li>连接关系不变，变的是每个图组件携带的信息。</li>
+          </ul>
+          <div class="formula compact">
+            \[
+              h_v'=\phi_V(h_v),\quad
+              e_{uv}'=\phi_E(e_{uv}),\quad
+              u'=\phi_U(u)
+            \]
+          </div>
+        </div>
+        <div class="distill-frame">
+          <iframe src="assets/distill/focused.html?figure=graph-description" title="Graph attribute interaction"></iframe>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>这一步还没有利用邻居关系，只是在图组件上学习表示。</span>
+        <span>Interactive figure from Distill, CC-BY 4.0.</span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">Pooling</div>
+          <h2>Pooling 把信息路由到预测所需的位置</h2>
+        </div>
+        <div class="page-no">09</div>
+      </header>
+      <div class="slide-body two-col">
+        <div class="stack">
+          <p class="body-copy">如果节点没有特征，但边有特征，节点预测就需要先把相关边的信息聚合到目标节点。</p>
+          <div class="formula">
+            \[
+              m_v=\rho(\{h_e:e\rightarrow v\})
+            \]
+            \[
+              \rho\in\{\mathrm{sum},\mathrm{mean},\mathrm{max}\}
+            \]
+          </div>
+        </div>
+        <div class="distill-frame">
+          <iframe src="assets/distill/focused.html?figure=node-step-small" title="Pooling edge to node interaction"></iframe>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>hover 黑色目标节点，查看哪些边会被收集并聚合。</span>
+        <span>Interactive figure from Distill, CC-BY 4.0.</span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">Message Passing</div>
+          <h2>GNN 的核心迭代：消息、聚合、更新</h2>
+        </div>
+        <div class="page-no">10</div>
+      </header>
+      <div class="slide-body two-col">
+        <div class="formula compact">
+          \[
+            m_{uv}^{(k)}=\phi_m(h_u^{(k)},h_v^{(k)},e_{uv})
+          \]
+          \[
+            \bar m_v^{(k)}=\rho(\{m_{uv}^{(k)}:u\in\mathcal{N}(v)\})
+          \]
+          \[
+            h_v^{(k+1)}=\phi_u(h_v^{(k)},\bar m_v^{(k)})
+          \]
+        </div>
+        <div class="distill-frame">
+          <iframe src="assets/distill/focused.html?figure=node-step" title="Message passing interaction"></iframe>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>一层 message passing 后，节点表示融合一跳邻居信息。</span>
+        <span>Interactive figure from Distill, CC-BY 4.0.</span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">GCN Matrix View</div>
+          <h2>GCN 可以看成用归一化邻接矩阵做邻居聚合</h2>
+        </div>
+        <div class="page-no">11</div>
+      </header>
+      <div class="slide-body two-col-even">
+        <div class="stack">
+          <div class="formula">
+            \[
+              H^{(k+1)}=\sigma(\hat D^{-1/2}\hat A\hat D^{-1/2}H^{(k)}W^{(k)})
+            \]
+          </div>
+          <ul class="bullets">
+            <li>\(\hat A=A+I\)：给每个节点加入自环。</li>
+            <li>\(\hat D\)：按度数做归一化，避免高度节点支配聚合。</li>
+            <li>\(K\) 层 GCN 让节点最多接收 \(K\)-hop 范围的信息。</li>
+          </ul>
+        </div>
+        <div class="distill-frame">
+          <iframe src="assets/distill/focused.html?figure=layerwise-trace" title="K hop propagation interaction"></iframe>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>这页把 message passing 和矩阵乘法视角连起来。</span>
+        <span>Distill, CC-BY 4.0.</span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">GNN Playground</div>
+          <h2>用分子图任务直观看模型设计选择的影响</h2>
+        </div>
+        <div class="page-no">12</div>
+      </header>
+      <div class="slide-body">
+        <div class="distill-frame tall">
+          <iframe src="assets/distill/focused.html?figure=playground" title="GNN playground interaction"></iframe>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>Playground 依赖 TensorFlow.js 和部分远程模型资源；联网时可完整操作。</span>
+        <span>Interactive figure from Distill, CC-BY 4.0.</span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">Memory Bottleneck</div>
+          <h2>大图训练的瓶颈常常不是参数，而是反向传播要保存的激活</h2>
+        </div>
+        <div class="page-no">13</div>
+      </header>
+      <div class="slide-body two-col">
+        <div class="stack">
+          <ul class="bullets">
+            <li>mini-batch 节点的 \(K\)-hop 邻域会快速膨胀。</li>
+            <li>反向传播需要保存每层参与计算的节点表示和边索引。</li>
+            <li>平均度越高、层数越深，邻居爆炸越明显。</li>
+          </ul>
+          <div class="formula compact">
+            \[
+              \mathrm{memory}\approx
+              \sum_{l=0}^{K}|\mathcal{N}^{l}(B)|d_l
+            \]
+            若平均度为 \(d\)，规模约为：
+            \[
+              O(|B|d^K)
+            \]
+          </div>
+        </div>
+        <div class="diagram-panel">
+          <canvas id="memoryCanvas" width="760" height="430" aria-label="Neighbor explosion memory diagram"></canvas>
+          <div class="memory-controls">
+            <label>层数 K <input id="layerCount" type="range" min="1" max="5" value="3"> <span id="layersLabel">3</span></label>
+            <label>平均度 d <input id="degreeCount" type="range" min="2" max="6" value="4"> <span id="degreeLabel">4</span></label>
+            <label><input id="samplingToggle" type="checkbox"> 开启 neighbor sampling</label>
+          </div>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>拖动滑块看邻域规模如何随层数和平均度增长。</span>
+        <span>Local explanatory diagram.</span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">Scaling Methods</div>
+          <h2>解决思路：少算、分块、重算，同时尽量保留结构信息</h2>
+        </div>
+        <div class="page-no">14</div>
+      </header>
+      <div class="slide-body">
+        <div class="solution-grid">
+          <div class="solution"><strong>GraphSAGE</strong><span>每层采样固定数量邻居，控制 fanout，适合归纳式学习。</span></div>
+          <div class="solution"><strong>Layer-wise sampling</strong><span>逐层采样计算依赖，减少每一层保存的激活范围。</span></div>
+          <div class="solution"><strong>Cluster-GCN</strong><span>先把图聚类，每步训练一个或多个稠密子图。</span></div>
+          <div class="solution"><strong>GraphSAINT</strong><span>采样子图构造 mini-batch，并用归一化修正采样偏差。</span></div>
+          <div class="solution"><strong>Checkpointing</strong><span>前向少存中间激活，反向时重算，用计算换显存。</span></div>
+        </div>
+        <div class="formula compact">
+          \[
+            \text{full neighborhood: } O(|B|d^K)
+            \quad\rightarrow\quad
+            \text{sampled fanout: } O(|B|\prod_{l=1}^{K}s_l)
+          \]
+        </div>
+      </div>
+      <footer class="footer">
+        <span>核心取舍：显存、计算量、采样方差、结构完整性。</span>
+        <span>Sources: GraphSAGE, Cluster-GCN, GraphSAINT.</span>
+      </footer>
+    </section>
+
+    <section class="slide">
+      <header class="slide-header">
+        <div>
+          <div class="kicker">Takeaways</div>
+          <h2>GNN 是关系归纳偏置加可微消息传递</h2>
+        </div>
+        <div class="page-no">15</div>
+      </header>
+      <div class="slide-body two-col-even">
+        <div class="stack">
+          <ul class="bullets">
+            <li>图把实体和关系一起建模，比固定网格更灵活。</li>
+            <li>GNN 通过 message passing 让节点逐层吸收邻域信息。</li>
+            <li>排列不变的聚合函数是处理图的关键。</li>
+            <li>大图训练要控制 \(K\)-hop 依赖带来的激活和梯度内存。</li>
+          </ul>
+        </div>
+        <div class="source-list">
+          <div><strong>主要交互来源</strong><br><a href="https://distill.pub/2021/gnn-intro/">A Gentle Introduction to Graph Neural Networks</a>, Distill, 2021. Diagrams and text licensed under CC-BY 4.0 unless noted otherwise.</div>
+          <div><strong>大图训练参考</strong><br><a href="https://papers.neurips.cc/paper/6703-inductive-representation-learning-on-large-graphs">GraphSAGE</a>, <a href="https://www.kdd.org/kdd2019/accepted-papers/view/cluster-gcn-an-efficient-algorithm-for-training-deep-and-large-graph-convol">Cluster-GCN</a>, <a href="https://arxiv.org/abs/1907.04931">GraphSAINT</a>.</div>
+        </div>
+      </div>
+      <footer class="footer">
+        <span>结束语：保留足够结构，同时控制消息传播和反向传播的范围。</span>
+        <span>Thank you.</span>
+      </footer>
+    </section>
+  </main>
+
+  <nav class="controls" aria-label="Slide controls">
+    <button type="button" data-prev title="Previous slide">Prev</button>
+    <button type="button" data-next title="Next slide">Next</button>
+    <button type="button" data-fullscreen title="Toggle fullscreen">Full</button>
+    <button type="button" data-edit-layout title="Edit embedded figure layout">Edit layout</button>
+    <button type="button" aria-live="polite"><span data-current>01</span> / 15</button>
+  </nav>
+
+  <script defer src="assets/local/slides.js"></script>
+  <script defer src="assets/local/memory.js"></script>
+</body>
+</html>

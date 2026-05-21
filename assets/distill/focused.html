@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Distill Figure Focus</title>
+  <style>
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #f8f5ed;
+    }
+
+    #article {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #f8f5ed;
+      overflow: hidden;
+    }
+
+    .loading {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font: 15px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #3e3931;
+      background: #f8f5ed;
+    }
+  </style>
+</head>
+<body>
+  <div class="loading" id="loading">Loading Distill interactive figure...</div>
+  <iframe id="article" src="index.html" title="Distill interactive figure"></iframe>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const figureId = params.get("figure") || "layerwise-trace";
+    const iframe = document.getElementById("article");
+    const loading = document.getElementById("loading");
+    const figureDefaults = {
+      "text-as-graph": { zoom: 1, panX: 0, panY: 18, anchor: "top", width: 940, height: 420 },
+      "playground": { zoom: 1, panX: 48, panY: 0, anchor: "top", width: 1220, height: 760 }
+    };
+    const layout = { zoom: 1, panX: 0, panY: 0 };
+    let applyFit = null;
+
+    window.addEventListener("message", (event) => {
+      const message = event.data;
+      if (!message || message.type !== "distill-layout") return;
+      if (Number.isFinite(message.zoom)) layout.zoom = Math.max(0.25, Math.min(4, message.zoom));
+      if (Number.isFinite(message.panX)) layout.panX = message.panX;
+      if (Number.isFinite(message.panY)) layout.panY = message.panY;
+      if (message.resetView) {
+        layout.zoom = 1;
+        layout.panX = 0;
+        layout.panY = 0;
+      }
+      if (applyFit) applyFit();
+    });
+
+    function focusFigure() {
+      const doc = iframe.contentDocument;
+      if (!doc) return false;
+
+      const target = doc.getElementById(figureId);
+      if (!target) return false;
+
+      const figure = target.closest("figure") || target;
+      const caption = figure.querySelector("figcaption");
+      const defaults = figureDefaults[figureId] || {};
+      layout.zoom = defaults.zoom ?? layout.zoom;
+      layout.panX = defaults.panX ?? layout.panX;
+      layout.panY = defaults.panY ?? layout.panY;
+
+      doc.documentElement.classList.add("focused-distill");
+      doc.documentElement.classList.add(`focused-${figureId}`);
+      const style = doc.createElement("style");
+      style.textContent = `
+        html, body {
+          width: 100vw !important;
+          height: 100vh !important;
+          margin: 0 !important;
+          background: #f8f5ed !important;
+          overflow: hidden !important;
+        }
+        body > * { display: none !important; }
+        #focus-stage {
+          display: block !important;
+          position: fixed !important;
+          inset: 0 !important;
+          width: 100vw !important;
+          height: 100vh !important;
+          overflow: hidden !important;
+          background: #f8f5ed !important;
+        }
+        #focus-scale {
+          display: block !important;
+          position: absolute !important;
+          left: 50% !important;
+          top: 50% !important;
+          transform-origin: 0 0 !important;
+        }
+        #focus-stage figure.focused-figure {
+          display: block !important;
+          width: 100vw !important;
+          box-sizing: border-box !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+        #focus-stage figure.focused-figure > * {
+          max-width: none !important;
+        }
+        #focus-stage figure.focused-figure figcaption {
+          display: none !important;
+        }
+        html.focused-text-as-graph #focus-scale {}
+        html.focused-text-as-graph #text-as-graph {
+          min-width: 940px !important;
+          min-height: 420px !important;
+          padding-top: 86px !important;
+          overflow: visible !important;
+        }
+        html.focused-text-as-graph #text-as-graph input {
+          transform: translateY(-72px) !important;
+          color: #333 !important;
+          background: rgba(248, 245, 237, 0.92) !important;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.12) !important;
+          padding-bottom: 6px !important;
+        }
+        html.focused-text-as-graph #text-as-graph svg {
+          overflow: visible !important;
+        }
+        html.focused-playground #focus-scale {}
+        html.focused-playground #playground {
+          width: 1220px !important;
+          min-height: 760px !important;
+          overflow: visible !important;
+        }
+        html.focused-playground #playground #container,
+        html.focused-playground #playground #model-opts,
+        html.focused-playground #playground #svgs {
+          width: 1220px !important;
+        }
+        html.focused-playground #playground #svgs {
+          min-height: 560px !important;
+          overflow: visible !important;
+        }
+        html.focused-playground #playground #svg-holder {
+          overflow: visible !important;
+        }
+        d-title, d-byline, d-appendix, d-footnote-list, d-citation-list {
+          display: none !important;
+        }
+      `;
+      doc.head.appendChild(style);
+
+      figure.classList.add("focused-figure");
+      const stage = doc.createElement("div");
+      const scaler = doc.createElement("div");
+      stage.id = "focus-stage";
+      scaler.id = "focus-scale";
+      doc.body.appendChild(stage);
+      stage.appendChild(scaler);
+      scaler.appendChild(figure);
+      if (caption) caption.setAttribute("aria-hidden", "true");
+
+      const fit = () => {
+        iframe.contentWindow.dispatchEvent(new Event("resize"));
+        const pad = 16;
+        const availableWidth = Math.max(1, stage.clientWidth - pad * 2);
+        const availableHeight = Math.max(1, stage.clientHeight - pad * 2);
+        const width = Math.max(figure.scrollWidth, target.scrollWidth, target.getBoundingClientRect().width, defaults.width || 1);
+        const height = Math.max(figure.scrollHeight, target.scrollHeight, target.getBoundingClientRect().height, defaults.height || 1);
+        const scale = Math.min(availableWidth / width, availableHeight / height, 1);
+        scaler.style.width = `${width}px`;
+        scaler.style.height = `${height}px`;
+        scaler.style.left = "50%";
+        scaler.style.top = defaults.anchor === "top" ? `${pad}px` : "50%";
+        const yTranslate = defaults.anchor === "top" ? "0%" : "-50%";
+        scaler.style.transform = `translate(calc(-50% + ${layout.panX}px), calc(${yTranslate} + ${layout.panY}px)) scale(${scale * layout.zoom})`;
+      };
+
+      applyFit = fit;
+      fit();
+      setTimeout(fit, 120);
+      setTimeout(fit, 600);
+      iframe.contentWindow.addEventListener("resize", fit);
+      loading.style.display = "none";
+      return true;
+    }
+
+    iframe.addEventListener("load", () => {
+      let attempts = 0;
+      const timer = setInterval(() => {
+        attempts += 1;
+        if (focusFigure() || attempts > 80) {
+          clearInterval(timer);
+          if (attempts > 80) loading.textContent = "Figure not found: " + figureId;
+        }
+      }, 250);
+    });
+  </script>
+</body>
+</html>
